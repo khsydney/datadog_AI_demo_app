@@ -230,7 +230,7 @@ eksctl delete cluster -f eks/cluster.yaml
 
 ## Security note about the API key in this repo
 
-The `DD_API_KEY` you shared (`beac180a49c2a1c1ff9a327972a33669`) is
+The `DD_API_KEY` is
 embedded in `k8s/01-secrets.yaml` for the demo. **Rotate it in
 Datadog → Organisation Settings → API Keys after the demo.** Long term,
 keep it in AWS Secrets Manager or SOPS-encrypted manifests rather than
