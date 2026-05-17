@@ -1,0 +1,86 @@
+# k8s/30-rag-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-api
+  namespace: chat-llm-rag
+  labels:
+    app: rag-api
+    tags.datadoghq.com/service: rag-api
+    tags.datadoghq.com/env:     demo
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-api
+  template:
+    metadata:
+      labels:
+        app: rag-api
+        # Unified Service Tagging — these flow into every span, log and metric.
+        tags.datadoghq.com/service: rag-api
+        tags.datadoghq.com/env:     demo
+        tags.datadoghq.com/version: "1.0.0"
+        # APM auto-injection from the Cluster Agent's Admission Controller.
+        admission.datadoghq.com/enabled: "true"
+      annotations:
+        # OpenAI calls go through standard HTTPS — these tags help SIEM
+        # correlate egress with the service.
+        ad.datadoghq.com/rag-api.logs: '[{"source":"python","service":"rag-api"}]'
+    spec:
+      # Replace REGISTRY/REPO below with your actual image (e.g. ECR URL).
+      containers:
+        - name: rag-api
+          image: REGISTRY/chat-llm-rag-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef: { name: rag-config }
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom: { secretKeyRef: { name: rag-secrets,     key: OPENAI_API_KEY } }
+            - name: DD_API_KEY
+              valueFrom: { secretKeyRef: { name: datadog-secrets, key: DD_API_KEY } }
+            - name: DD_APP_KEY
+              valueFrom: { secretKeyRef: { name: datadog-secrets, key: DD_APP_KEY } }
+            # Send traces to the node-local Datadog Agent (DaemonSet).
+            - name: DD_AGENT_HOST
+              valueFrom: { fieldRef: { fieldPath: status.hostIP } }
+            - name: DD_TRACE_AGENT_PORT
+              value: "8126"
+            - name: DD_DOGSTATSD_HOST
+              valueFrom: { fieldRef: { fieldPath: status.hostIP } }
+            - name: DD_DOGSTATSD_PORT
+              value: "8125"
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "500m", memory: "3Gi" }
+            limits:   { cpu: "2",    memory: "6Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-api
+  namespace: chat-llm-rag
+  labels:
+    app: rag-api
+spec:
+  # ClusterIP for in-cluster traffic from the UI pod. The UI is the only
+  # public service.
+  type: ClusterIP
+  selector:
+    app: rag-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

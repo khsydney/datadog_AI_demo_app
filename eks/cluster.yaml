@@ -1,0 +1,55 @@
+# eks/cluster.yaml
+# Minimal EKS cluster, EC2-backed (no Fargate, no ALB, no Route53).
+# Service exposure is via NodePort + kubectl port-forward / EC2 public IPs.
+#
+# Provision with:   eksctl create cluster -f eks/cluster.yaml
+# Destroy with:     eksctl delete cluster -f eks/cluster.yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: chat-llm-rag
+  region: us-east-1
+  version: "1.30"
+  tags:
+    project: chat-llm-rag
+    owner: demo
+    cost-center: lab
+
+iam:
+  withOIDC: true                # required so Datadog Cluster Agent / IRSA work
+
+# Two managed node group EC2 nodes. Sized so each can hold the API pod
+# (BGE-m3 + reranker need ~5 GB RAM) plus Datadog Agent and Milvus shards.
+managedNodeGroups:
+  - name: ng-app
+    instanceType: t3.xlarge     # 4 vCPU, 16 GB RAM
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 80
+    volumeType: gp3
+    privateNetworking: false    # public subnets so NodePort is reachable
+    ssh:
+      allow: false
+    labels:
+      role: app
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+      k8s.io/cluster-autoscaler/chat-llm-rag: "owned"
+    iam:
+      withAddonPolicies:
+        autoScaler: true
+        ebs: true
+        cloudWatch: true
+        imageBuilder: true       # ECR pull
+
+addons:
+  - name: vpc-cni
+  - name: kube-proxy
+  - name: coredns
+  - name: aws-ebs-csi-driver     # needed for PVCs (Milvus, Redis, minio, etcd)
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator", "controllerManager"]

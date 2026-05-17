@@ -1,0 +1,44 @@
+# k8s/50-indexer-job.yaml
+#
+# Run after Milvus is Ready. The job mounts an emptyDir but in real use you'd
+# either bake the docs into the image (already done in Dockerfile.api: COPY
+# data ./data) or mount an S3-backed PVC. With the baked-in approach you can
+# just run:
+#
+#   kubectl -n chat-llm-rag apply -f k8s/50-indexer-job.yaml
+#   kubectl -n chat-llm-rag logs -f job/rag-indexer
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rag-indexer
+  namespace: chat-llm-rag
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: rag-indexer
+        tags.datadoghq.com/service: rag-indexer
+        tags.datadoghq.com/env:     demo
+        admission.datadoghq.com/enabled: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: indexer
+          image: REGISTRY/chat-llm-rag-api:1.0.0   # same image as the API
+          command: ["python", "-m", "index.indexer"]
+          envFrom:
+            - configMapRef: { name: rag-config }
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom: { secretKeyRef: { name: rag-secrets,     key: OPENAI_API_KEY } }
+            - name: DD_API_KEY
+              valueFrom: { secretKeyRef: { name: datadog-secrets, key: DD_API_KEY } }
+            - name: DD_AGENT_HOST
+              valueFrom: { fieldRef: { fieldPath: status.hostIP } }
+            - name: DD_SERVICE
+              value: "rag-indexer"
+          resources:
+            requests: { cpu: "500m", memory: "2Gi" }
+            limits:   { cpu: "2",    memory: "4Gi" }

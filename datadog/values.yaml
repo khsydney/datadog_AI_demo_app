@@ -1,0 +1,154 @@
+# datadog/values.yaml
+#
+# Helm values for the official Datadog chart (`datadog/datadog`).
+#
+# Install:
+#   helm repo add datadog https://helm.datadoghq.com
+#   helm repo update
+#   kubectl create ns datadog
+#   kubectl -n datadog create secret generic datadog-keys \
+#       --from-literal api-key=$DD_API_KEY \
+#       --from-literal app-key=$DD_APP_KEY
+#   helm upgrade --install datadog datadog/datadog \
+#       -n datadog -f datadog/values.yaml
+#
+# What this turns on:
+#   ✓ APM tracing                       (apm.portEnabled)
+#   ✓ Logs from every pod               (logs.enabled + containerCollectAll)
+#   ✓ Process monitoring                (processAgent.processCollection)
+#   ✓ CSPM (Cloud Security Posture)     (securityAgent.compliance.enabled)
+#   ✓ CWS (Cloud Workload Security)     (securityAgent.runtime.enabled)
+#   ✓ SBOM + container vulnerability    (sbom.containerImage / sbom.host)
+#   ✓ Universal Service Monitoring      (networkMonitoring + serviceMonitoring)
+#   ✓ Kubernetes Cluster Agent + DCA    (clusterAgent.enabled)
+#   ✓ Admission Controller (auto-inject ddtrace into rag-api/rag-ui)
+#   ✓ Kube State Metrics                (kubeStateMetricsEnabled)
+#   ✓ Orchestrator Explorer             (orchestratorExplorer.enabled)
+#
+# CIEM is enabled via the AWS Integration in the Datadog UI:
+#   Integrations → AWS → "Add an AWS Account" → Cloud Security Posture
+#   Management on, Identity Risks (CIEM) on. That deploys an IAM role in
+#   your AWS account that Datadog uses to pull IAM/STS data. There is no
+#   in-cluster component for CIEM.
+
+datadog:
+  apiKeyExistingSecret: datadog-keys
+  appKeyExistingSecret: datadog-keys
+  site: ap2.datadoghq.com
+  clusterName: chat-llm-rag
+
+  # Unified Service Tags applied to every metric/log/trace from the Agent.
+  env:
+    - { name: DD_HOSTNAME_TRUST_UTS_HOSTNAME, value: "true" }
+    - { name: DD_TAGS, value: "env:demo project:chat-llm-rag" }
+
+  # ── Logs ─────────────────────────────────────────────────────────────────
+  logs:
+    enabled: true
+    containerCollectAll: true            # pick up every pod's stdout/stderr
+    containerCollectUsingFiles: true
+
+  # ── APM ──────────────────────────────────────────────────────────────────
+  apm:
+    portEnabled: true                    # listen on host:8126 (used by pods)
+    socketEnabled: true
+    instrumentation:
+      enabled: true                      # Admission Controller injects ddtrace
+      enabledNamespaces:
+        - chat-llm-rag
+
+  # ── Profiles & process monitoring ───────────────────────────────────────
+  processAgent:
+    enabled: true
+    processCollection: true
+    processDiscovery: true
+
+  # ── Universal Service Monitoring + Network ──────────────────────────────
+  networkMonitoring:
+    enabled: true
+  serviceMonitoring:
+    enabled: true
+
+  # ── SBOM & container image vulnerability ───────────────────────────────
+  sbom:
+    containerImage:
+      enabled: true
+      uncompressedLayersSupport: true
+    host:
+      enabled: true
+
+  # ── Cloud Security ─────────────────────────────────────────────────────
+  securityAgent:
+    compliance:
+      enabled: true                      # CSPM benchmarks (CIS K8s, Docker, …)
+      configMap: ""                      # use packaged default benchmarks
+      checkInterval: 20m
+    runtime:
+      enabled: false                      # Cloud Workload Security (CWS / runtime)
+      syscallMonitor:
+        enabled: false
+
+  # ── Orchestrator Explorer + KSM Core ────────────────────────────────────
+  orchestratorExplorer:
+    enabled: true
+  kubeStateMetricsCore:
+    enabled: true
+
+  # ── LLM Observability (cluster-agent picks this up via env on pods) ─────
+  # The actual LLMObs env vars are set on the rag-api / rag-ui pods, not
+  # here, because Datadog's LLM Obs reads them from the instrumented
+  # process.
+
+  # ── App and API Protection (ASM) — required substrate for AI Guard ──────
+  # AI Guard rides on top of ASM. With this enabled, the Cluster Agent
+  # also relays Remote Configuration to the in-pod ddtrace tracers, which
+  # is how AI Guard policy updates from the Datadog UI propagate.
+  asm:
+    enabled: true
+    threats:
+      enabled: true
+
+  # ── Remote Configuration ────────────────────────────────────────────────
+  # On by default in recent Agents, but be explicit. RC is the channel
+  # AI Guard uses to push policy changes to your services.
+  remoteConfiguration:
+    enabled: true
+
+# ── Cluster Agent ─────────────────────────────────────────────────────────
+clusterAgent:
+  enabled: true
+  metricsProvider:
+    enabled: true
+  admissionController:
+    enabled: true
+    mutateUnlabelled: false              # we set the label per-pod ourselves
+    failurePolicy: Ignore
+
+# ── DaemonSet sizing ──────────────────────────────────────────────────────
+agents:
+  enabled: true
+  containers:
+    agent:
+      resources:
+        requests: { cpu: "200m", memory: "512Mi" }
+        limits:   { cpu: "1",    memory: "1Gi"   }
+    processAgent:
+      resources:
+        requests: { cpu: "100m", memory: "256Mi" }
+        limits:   { cpu: "1",    memory: "1Gi"   }
+    traceAgent:
+      resources:
+        requests: { cpu: "100m", memory: "256Mi" }
+        limits:   { cpu: "1",    memory: "1Gi"   }
+    systemProbe:
+      resources:
+        requests: { cpu: "100m", memory: "256Mi" }
+        limits:   { cpu: "1",    memory: "1Gi"   }
+    securityAgent:
+      resources:
+        requests: { cpu: "100m", memory: "256Mi" }
+        limits:   { cpu: "1",    memory: "1Gi"   }
+
+# ── Kube State Metrics chart (subchart) ───────────────────────────────────
+kube-state-metrics:
+  enabled: false                         # using kubeStateMetricsCore instead

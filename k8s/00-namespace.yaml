@@ -1,0 +1,37 @@
+# k8s/00-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chat-llm-rag
+  labels:
+    name: chat-llm-rag
+    # Tells the Datadog Cluster Agent's Admission Controller to
+    # inject the ddtrace library into every pod in this namespace.
+    admission.datadoghq.com/enabled: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-config
+  namespace: chat-llm-rag
+data:
+  EMBEDDING_MODEL:   "BAAI/bge-m3"
+  CHAT_MODEL:        "gpt-4o-mini"
+  TEMPERATURE:       "0.2"
+  RETRIEVAL_TOP_K:   "100"
+  RERANK_TOP_K:      "70"
+  MILVUS_URI:        "http://milvus:19530"
+  MILVUS_COLLECTION: "rag_chunks"
+  REDIS_URL:         "redis://redis:6379/0"
+  # Datadog LLM Observability config (US1 site)
+  DD_SITE:               "ap2.datadoghq.com"
+  DD_LLMOBS_ENABLED:     "1"
+  DD_LLMOBS_ML_APP:      "chat-llm-rag"
+  DD_ENV:                "demo"
+  DD_LOGS_INJECTION:     "true"
+  DD_PROFILING_ENABLED:  "true"
+  DD_APPSEC_ENABLED:     "true"
+  DD_AI_GUARD_ENABLED:   "true"
+  # Set to "false" for monitor-only mode (evaluations run, no blocking).
+  DD_AI_GUARD_BLOCK:     "true"
+  DD_IAST_ENABLED:       "true"

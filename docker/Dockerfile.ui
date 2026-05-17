@@ -1,0 +1,24 @@
+# docker/Dockerfile.ui
+# Frontend: Streamlit UI. Lightweight image — no model/RAG deps.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Slim deps list — UI only needs streamlit, httpx, dotenv, ddtrace.
+RUN pip install --upgrade pip && \
+    pip install streamlit httpx python-dotenv 'ddtrace>=4.7.0'
+
+COPY streamlit_app.py ./streamlit_app.py
+
+EXPOSE 8501
+
+ENV DD_SERVICE=rag-ui \
+    DD_ENV=demo \
+    DD_VERSION=1.0.0 \
+    DD_LOGS_INJECTION=true
+
+CMD ["ddtrace-run", "streamlit", "run", "streamlit_app.py", \
+     "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]

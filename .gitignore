@@ -1,0 +1,33 @@
+.env
+.env.local
+.env.production
+.env.staging
+!.env.example
+docker/volumes/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Models cache (large, downloaded at build time)
+models/
+
+# Secrets — never commit populated secret files
+/tmp/secrets.yaml
+k8s/01-secrets.populated.yaml
+
+# IDE
+.idea/
+.vscode/
+
+# Backup and log files
+*.bak
+*.bak[0-9]*
+*.log
+deploy.log

@@ -1,0 +1,52 @@
+# k8s/20-redis.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: chat-llm-rag
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: chat-llm-rag
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tags.datadoghq.com/service: redis
+        tags.datadoghq.com/env: demo
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { cpu: "50m",  memory: "128Mi" }
+            limits:   { cpu: "200m", memory: "512Mi" }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: gp3

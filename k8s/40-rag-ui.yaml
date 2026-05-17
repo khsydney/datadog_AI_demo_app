@@ -1,0 +1,69 @@
+# k8s/40-rag-ui.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-ui
+  namespace: chat-llm-rag
+  labels:
+    app: rag-ui
+    tags.datadoghq.com/service: rag-ui
+    tags.datadoghq.com/env:     demo
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-ui
+  template:
+    metadata:
+      labels:
+        app: rag-ui
+        tags.datadoghq.com/service: rag-ui
+        tags.datadoghq.com/env:     demo
+        tags.datadoghq.com/version: "1.0.0"
+        admission.datadoghq.com/enabled: "true"
+      annotations:
+        ad.datadoghq.com/rag-ui.logs: '[{"source":"python","service":"rag-ui"}]'
+    spec:
+      containers:
+        - name: rag-ui
+          image: REGISTRY/chat-llm-rag-ui:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+              name: http
+          env:
+            - name: API_BASE
+              value: "http://rag-api:8000"
+            - name: DD_API_KEY
+              valueFrom: { secretKeyRef: { name: datadog-secrets, key: DD_API_KEY } }
+            - name: DD_AGENT_HOST
+              valueFrom: { fieldRef: { fieldPath: status.hostIP } }
+            - name: DD_TRACE_AGENT_PORT
+              value: "8126"
+            - name: DD_SITE
+              value: "ap2.datadoghq.com"
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-ui
+  namespace: chat-llm-rag
+  labels:
+    app: rag-ui
+spec:
+  # NodePort so the UI is reachable from any worker node's public IP without
+  # provisioning an ALB. After deploy, allow inbound 30080 on the node SG.
+  #   kubectl get nodes -o wide          # find a node's ExternalIP
+  #   open http://<node-ip>:30080
+  type: NodePort
+  selector:
+    app: rag-ui
+  ports:
+    - name: http
+      port: 8501
+      targetPort: 8501
+      nodePort: 30080

@@ -1,0 +1,29 @@
+# ── App & RAG ──────────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+pydantic-settings
+httpx
+python-dotenv
+langchain
+langchain-openai
+langchain-community
+langchain-core
+langchain-text-splitters
+langchain-milvus
+pymilvus
+langchain-huggingface
+sentence-transformers
+pypdf
+unstructured[all-docs]
+html2text
+markdown
+streamlit
+redis
+requests
+python-json-logger
+
+# ── Datadog ────────────────────────────────────────────────────────────────
+# ddtrace bundles APM tracing, profiling, LLM Observability, ASM and AI Guard.
+# >=4.7 makes ddtrace.appsec.ai_guard available.
+ddtrace>=4.7.0
+datadog>=0.50.0
