@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import AsyncGenerator, List, Tuple
+from typing import AsyncGenerator, List
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from ddtrace.llmobs import LLMObs
+from ddtrace.llmobs.types import Prompt
 
 from langchain_community.chat_message_histories import (
     ChatMessageHistory,
@@ -37,9 +38,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda, RunnableWithMessageHistory
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import ChatOpenAI
-from sentence_transformers import CrossEncoder
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from app.ai_guard import evaluate_response
 
@@ -47,7 +46,7 @@ log = logging.getLogger("rag.pipeline")
 
 
 # ───────────────────────────── Config ──────────────────────────────────────
-EMB_MODEL   = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+EMB_MODEL   = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 MILVUS_URI  = os.getenv("MILVUS_URI", "http://milvus:19530")
 COLL        = os.getenv("MILVUS_COLLECTION", "rag_chunks")
 RETRIEVAL_K = int(os.getenv("RETRIEVAL_TOP_K", "100"))
@@ -60,12 +59,7 @@ MEMORY_TTL_SEC   = int(os.getenv("MEMORY_TTL_SEC", "604800"))
 
 
 # ───────────────────────────── Models ──────────────────────────────────────
-emb = HuggingFaceEmbeddings(model_name=EMB_MODEL)
-
-try:
-    _cross = CrossEncoder("BAAI/bge-reranker-v2-m3")
-except Exception:  # noqa: BLE001
-    _cross = None
+emb = OpenAIEmbeddings(model=EMB_MODEL)
 
 llm = ChatOpenAI(
     model=CHAT_MODEL,
@@ -107,22 +101,8 @@ def _milvus_search(question: str, k: int = RETRIEVAL_K) -> List[Document]:
 
 
 # ───────────────────────────── Reranker ────────────────────────────────────
-def _rerank_impl(question: str, docs: List[Document]) -> List[Document]:
-    if not docs:
-        return []
-    if not _cross:
-        return docs[:RERANK_K]
-    pairs = [[question, d.page_content] for d in docs]
-    scores = _cross.predict(pairs)
-    ranked: List[Tuple[Document, float]] = sorted(
-        zip(docs, scores), key=lambda x: x[1], reverse=True
-    )[:RERANK_K]
-    return [d for d, _ in ranked]
-
-
-Rerank = RunnableLambda(
-    lambda x: {"question": x["question"], "docs": _rerank_impl(x["question"], x["docs"])}
-).with_config({"run_name": "bge-reranker"})
+def _rerank_impl(docs: List[Document]) -> List[Document]:
+    return docs[:RERANK_K]
 
 
 def _format_ctx(docs: List[Document]) -> str:
@@ -215,7 +195,7 @@ async def stream_generate(question: str, session_id: str = "default") -> AsyncGe
 
         # 2. Rerank ─────────────────────────────────────────────────────────
         with LLMObs.task(name="rerank") as rr_span:
-            reranked = _rerank_impl(question, docs)
+            reranked = _rerank_impl(docs)
             LLMObs.annotate(
                 span=rr_span,
                 input_data={"question": question, "n_in": len(docs)},
@@ -242,14 +222,27 @@ async def stream_generate(question: str, session_id: str = "default") -> AsyncGe
                 input_data=question,
                 metadata={"provider": "openai", "model": CHAT_MODEL},
             )
-            async for chunk in llm_chain_stream_with_mem.astream(
-                {"question": question, "context": context},
-                config={"configurable": {"session_id": session_id}},
+            with LLMObs.annotation_context(
+                prompt=Prompt(
+                    id="rag-qa-prompt",
+                    template=(
+                        "You are a document Q&A assistant. "
+                        "Answer using the context below.\n\nContext:\n{{context}}"
+                    ),
+                    version="1.0.0",
+                    variables={"context": context, "question": question},
+                    rag_context_variables=["context"],
+                    rag_query_variables=["question"],
+                )
             ):
-                text = chunk.content if isinstance(chunk, AIMessageChunk) else str(chunk)
-                if text:
-                    buf.append(text)
-                    yield text
+                async for chunk in llm_chain_stream_with_mem.astream(
+                    {"question": question, "context": context},
+                    config={"configurable": {"session_id": session_id}},
+                ):
+                    text = chunk.content if isinstance(chunk, AIMessageChunk) else str(chunk)
+                    if text:
+                        buf.append(text)
+                        yield text
 
             full_answer = "".join(buf)
             LLMObs.annotate(span=agent_span, output_data=full_answer)

@@ -32,8 +32,8 @@ spec:
       # Replace REGISTRY/REPO below with your actual image (e.g. ECR URL).
       containers:
         - name: rag-api
-          image: REGISTRY/chat-llm-rag-api:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: 432030471883.dkr.ecr.us-east-1.amazonaws.com/chat-llm-rag-api:2.1.2
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http
@@ -55,17 +55,28 @@ spec:
               valueFrom: { fieldRef: { fieldPath: status.hostIP } }
             - name: DD_DOGSTATSD_PORT
               value: "8125"
+          volumeMounts:
+            - name: docs-store
+              mountPath: /data/docs
           readinessProbe:
             httpGet: { path: /health, port: 8000 }
-            initialDelaySeconds: 10
-            periodSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet: { path: /health, port: 8000 }
-            initialDelaySeconds: 60
-            periodSeconds: 20
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           resources:
             requests: { cpu: "500m", memory: "3Gi" }
             limits:   { cpu: "2",    memory: "6Gi" }
+      volumes:
+        - name: docs-store
+          persistentVolumeClaim:
+            claimName: docs-pvc
 ---
 apiVersion: v1
 kind: Service

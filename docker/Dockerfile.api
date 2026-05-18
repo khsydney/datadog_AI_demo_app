@@ -1,37 +1,34 @@
 # docker/Dockerfile.api
-# Backend: FastAPI + RAG pipeline. ddtrace-run wraps uvicorn.
-FROM python:3.11-slim AS base
+# Backend: FastAPI + RAG pipeline.
+# No local models — embeddings via OpenAI API, reranking via Cohere API.
+# SSI (Datadog Admission Controller) owns ddtrace injection — no ddtrace-run here.
+
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/models \
-    SENTENCE_TRANSFORMERS_HOME=/models
+    PIP_NO_CACHE_DIR=1
 
-# Build deps for unstructured / pymilvus / torch wheels
+# libmagic1     — python-magic for upload file-type detection
+# poppler-utils — pdftotext / pdfinfo for PDF loader
+# curl          — healthcheck + debug
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential curl libmagic1 poppler-utils tesseract-ocr libgl1 \
+        libmagic1 \
+        poppler-utils \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# Pre-cache the embedding + reranker models so the pod doesn't pull them at
-# request time. The Python lines exit 0 on failure so the build doesn't break
-# in air-gapped CI; first request will then download lazily.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')" || true
-RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-v2-m3')" || true
-
-COPY app ./app
+COPY app   ./app
 COPY index ./index
-COPY data ./data
+COPY data  ./data
 
 EXPOSE 8000
 
-# Datadog Unified Service Tags — picked up by ddtrace.
 ENV DD_SERVICE=rag-api \
     DD_ENV=demo \
     DD_VERSION=1.0.0 \
@@ -39,6 +36,4 @@ ENV DD_SERVICE=rag-api \
     DD_PROFILING_ENABLED=true \
     DD_APPSEC_ENABLED=true
 
-# ddtrace-run installs all auto-instrumentation hooks (FastAPI, OpenAI,
-# LangChain, Redis, httpx, …) before uvicorn imports the app module.
-CMD ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

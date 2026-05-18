@@ -15,11 +15,12 @@ metadata:
   name: rag-config
   namespace: chat-llm-rag
 data:
-  EMBEDDING_MODEL:   "BAAI/bge-m3"
-  CHAT_MODEL:        "gpt-4o-mini"
+  EMBEDDING_MODEL:   "text-embedding-3-large"
+  EMBEDDING_DIM:     "3072"
+  CHAT_MODEL:        "gpt-3.5-turbo"
   TEMPERATURE:       "0.2"
-  RETRIEVAL_TOP_K:   "100"
-  RERANK_TOP_K:      "70"
+  RETRIEVAL_TOP_K:   "10"
+  RERANK_TOP_K:      "10"
   MILVUS_URI:        "http://milvus:19530"
   MILVUS_COLLECTION: "rag_chunks"
   REDIS_URL:         "redis://redis:6379/0"

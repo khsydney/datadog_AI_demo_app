@@ -21,14 +21,14 @@ spec:
         tags.datadoghq.com/service: rag-ui
         tags.datadoghq.com/env:     demo
         tags.datadoghq.com/version: "1.0.0"
-        admission.datadoghq.com/enabled: "true"
+        admission.datadoghq.com/enabled: "false"
       annotations:
         ad.datadoghq.com/rag-ui.logs: '[{"source":"python","service":"rag-ui"}]'
     spec:
       containers:
         - name: rag-ui
-          image: REGISTRY/chat-llm-rag-ui:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: 432030471883.dkr.ecr.us-east-1.amazonaws.com/chat-llm-rag-ui:1.0.0
+          imagePullPolicy: Always
           ports:
             - containerPort: 8501
               name: http

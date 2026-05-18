@@ -21,6 +21,7 @@ models/
 # Secrets — never commit populated secret files
 /tmp/secrets.yaml
 k8s/01-secrets.populated.yaml
+k8s/01-secrets.yaml
 
 # IDE
 .idea/

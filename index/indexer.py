@@ -25,12 +25,12 @@ from langchain_community.document_loaders import (
     UnstructuredMarkdownLoader,
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
 
-EMB_MODEL     = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+EMB_MODEL     = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 MILVUS_URI    = os.getenv("MILVUS_URI", "http://milvus:19530")
 COLL          = os.getenv("MILVUS_COLLECTION", "rag_chunks")
-DIM           = int(os.getenv("EMBEDDING_DIM", "1024"))   # BGE-m3 = 1024
+DIM           = int(os.getenv("EMBEDDING_DIM", "3072"))   # text-embedding-3-large = 3072
 CHUNK_SIZE    = int(os.getenv("CHUNK_SIZE", "800"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
 DEFAULT_DIR   = os.getenv("DOC_STORE_DIR", "/data/docs")
@@ -107,11 +107,13 @@ def reindex_directory(
     splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     chunks = splitter.split_documents(docs)
 
-    # 3. Embed
+    # 3. Embed in batches to avoid OOM on large doc sets
     if embedding_fn is None:
-        emb = HuggingFaceEmbeddings(model_name=EMB_MODEL)
-        embedding_fn = emb.embed_documents
-    vectors = embedding_fn([c.page_content for c in chunks])
+        embedding_fn = OpenAIEmbeddings(model=EMB_MODEL).embed_documents
+    EMBED_BATCH = 32
+    vectors: list = []
+    for i in range(0, len(chunks), EMBED_BATCH):
+        vectors.extend(embedding_fn([c.page_content for c in chunks[i:i + EMBED_BATCH]]))
 
     # 4. Upsert
     client = MilvusClient(uri=MILVUS_URI)

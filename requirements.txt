@@ -11,10 +11,8 @@ langchain-core
 langchain-text-splitters
 langchain-milvus
 pymilvus
-langchain-huggingface
-sentence-transformers
 pypdf
-unstructured[all-docs]
+unstructured[pdf,md]
 html2text
 markdown
 streamlit

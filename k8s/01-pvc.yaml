@@ -12,9 +12,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: gp2
   resources:
     requests:
       storage: 5Gi
-  # Uses the cluster default StorageClass.
-  # On your EKS cluster that's `gp2` (the EBS CSI default) unless you
-  # made another one default. Verify with: kubectl get storageclass
