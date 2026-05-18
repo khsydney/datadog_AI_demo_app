@@ -228,10 +228,8 @@ kubectl delete ns chat-llm-rag
 eksctl delete cluster -f eks/cluster.yaml
 ```
 
-## Security note about the API key in this repo
+## Security note about API keys
 
-The `DD_API_KEY` you shared (`beac180a49c2a1c1ff9a327972a33669`) is
-embedded in `k8s/01-secrets.yaml` for the demo. **Rotate it in
-Datadog → Organisation Settings → API Keys after the demo.** Long term,
-keep it in AWS Secrets Manager or SOPS-encrypted manifests rather than
-in cleartext YAML.
+`k8s/01-secrets.yaml` is gitignored — never commit it with real values.
+Use `k8s/01-secrets.yaml.example` as a template. Long term, keep secrets
+in AWS Secrets Manager or SOPS-encrypted manifests rather than cleartext YAML.
