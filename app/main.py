@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Datadog APM + LLM Observability ────────────────────────────────────────
+import ddtrace
+ddtrace.patch(redis=True)
+
 from ddtrace.llmobs import LLMObs
 LLMObs.enable(
     ml_app=os.getenv("DD_LLMOBS_ML_APP", "chat-llm-rag"),
