@@ -32,7 +32,7 @@ spec:
       # Replace REGISTRY/REPO below with your actual image (e.g. ECR URL).
       containers:
         - name: rag-api
-          image: 432030471883.dkr.ecr.us-east-1.amazonaws.com/chat-llm-rag-api:2.1.2
+          image: 432030471883.dkr.ecr.us-east-1.amazonaws.com/chat-llm-rag-api:2.1.3
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
